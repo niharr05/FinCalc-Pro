@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="Professional Compound Interest Calculator — calculate maturity value, interest earned, and visualize your investment growth with interactive charts." />
+    <meta name="keywords" content="compound interest, calculator, investment, finance, maturity value, interest rate" />
+    <meta name="author" content="FinCalc Pro" />
+    <title>Compound Interest Calculator — FinCalc Pro</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+    <!-- html2pdf for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <!-- ───────── Loader Overlay ───────── -->
+    <div id="page-loader" class="page-loader" aria-hidden="true">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- ───────── Header ───────── -->
+    <header class="site-header" role="banner">
+        <div class="header-inner container">
+            <a href="#" class="logo" aria-label="FinCalc Pro Home">
+                <span class="logo-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                        <rect width="28" height="28" rx="8" fill="url(#logo-grad)" />
+                        <path d="M8 20V10l6 5 6-5v10" stroke="#fff" stroke-width="2.2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <defs>
+                            <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
+                                <stop stop-color="#6366f1" />
+                                <stop offset="1" stop-color="#8b5cf6" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </span>
+                <span class="logo-text">FinCalc <strong>Pro</strong></span>
+            </a>
+            <nav class="header-actions" aria-label="Utility actions">
+                <button id="theme-toggle" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <svg class="icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5" />
+                        <path
+                            d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                    </svg>
+                    <svg class="icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ───────── Main ───────── -->
+    <main class="main container" role="main">
+        <!-- Hero -->
+        <section class="hero" aria-labelledby="hero-title">
+            <h1 id="hero-title" class="hero-title">Compound Interest Calculator</h1>
+            <p class="hero-subtitle">Plan your investments precisely — see how your money grows over time with the power
+                of compounding.</p>
+        </section>
+
+        <!-- Calculator Grid -->
+        <div class="calc-grid">
+            <!-- ──── Input Card ──── -->
+            <section class="card card-input" aria-labelledby="input-heading">
+                <div class="card-header">
+                    <h2 id="input-heading" class="card-title">
+                        <span class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="18" rx="3" />
+                                <path d="M2 9h20M9 21V9" />
+                            </svg>
+                        </span>
+                        Investment Details
+                    </h2>
+                </div>
+                <form id="calc-form" class="calc-form" novalidate>
+                    <!-- Principal -->
+                    <div class="form-group" id="group-principal">
+                        <label for="principal" class="form-label">Principal Amount</label>
+                        <div class="input-wrapper">
+                            <span class="input-prefix" aria-hidden="true">₹</span>
+                            <input type="text" id="principal" class="form-input" placeholder="e.g. 1,00,000"
+                                inputmode="numeric" autocomplete="off" aria-describedby="principal-error" required />
+                        </div>
+                        <span class="form-error" id="principal-error" role="alert"></span>
+                    </div>
+
+                    <!-- Rate -->
+                    <div class="form-group" id="group-rate">
+                        <label for="rate" class="form-label">Annual Interest Rate</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="rate" class="form-input" placeholder="e.g. 8.5" inputmode="decimal"
+                                autocomplete="off" aria-describedby="rate-error" required />
+                            <span class="input-suffix" aria-hidden="true">%</span>
+                        </div>
+                        <span class="form-error" id="rate-error" role="alert"></span>
+                    </div>
+
+                    <!-- Time -->
+                    <div class="form-group" id="group-time">
+                        <label for="time" class="form-label">Time Period</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="time" class="form-input" placeholder="e.g. 10" inputmode="decimal"
+                                autocomplete="off" aria-describedby="time-error" required />
+                            <span class="input-suffix" aria-hidden="true">Years</span>
+                        </div>
+                        <span class="form-error" id="time-error" role="alert"></span>
+                    </div>
+
+                    <!-- Compounding Frequency -->
+                    <div class="form-group" id="group-frequency">
+                        <label for="frequency" class="form-label">Compounding Frequency</label>
+                        <div class="select-wrapper">
+                            <select id="frequency" class="form-select" aria-describedby="frequency-desc">
+                                <option value="1">Annually</option>
+                                <option value="2">Semi-Annually</option>
+                                <option value="4" selected>Quarterly</option>
+                                <option value="12">Monthly</option>
+                                <option value="365">Daily</option>
+                            </select>
+                            <span class="select-arrow" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" />
+                                </svg>
+                            </span>
+                        </div>
+                        <span class="form-hint" id="frequency-desc">How often interest is compounded</span>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="form-actions">
+                        <button type="submit" id="btn-calculate" class="btn btn-primary">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6m-3-3h6" />
+                            </svg>
+                            Calculate
+                        </button>
+                        <button type="reset" id="btn-reset" class="btn btn-ghost">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M1 4v6h6" />
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                            </svg>
+                            Reset
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- ──── Results Card ──── -->
+            <section class="card card-results hidden" id="results-card" aria-labelledby="results-heading">
+                <div class="card-header">
+                    <h2 id="results-heading" class="card-title">
+                        <span class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                            </svg>
+                        </span>
+                        Results
+                    </h2>
+                    <div class="result-actions">
+                        <button id="btn-copy" class="icon-btn small" aria-label="Copy results" title="Copy results">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                        </button>
+                        <button id="btn-print" class="icon-btn small" aria-label="Print results" title="Print results">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path
+                                    d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                <rect x="6" y="14" width="12" height="8" />
+                            </svg>
+                        </button>
+                        <button id="btn-pdf" class="icon-btn small" aria-label="Download PDF" title="Download PDF">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="12" y1="18" x2="12" y2="12" />
+                                <polyline points="9 15 12 18 15 15" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calculation loading overlay -->
+                <div id="calc-loader" class="calc-loader" aria-hidden="true">
+                    <div class="calc-loader-bar"></div>
+                    <span>Crunching numbers…</span>
+                </div>
+
+                <!-- Result Stat Cards -->
+                <div class="result-stats" id="result-stats">
+                    <div class="stat-card stat-principal">
+                        <span class="stat-label">Principal Amount</span>
+                        <span class="stat-value" id="res-principal">—</span>
+                    </div>
+                    <div class="stat-card stat-interest">
+                        <span class="stat-label">Interest Earned</span>
+                        <span class="stat-value" id="res-interest">—</span>
+                    </div>
+                    <div class="stat-card stat-maturity">
+                        <span class="stat-label">Maturity Value</span>
+                        <span class="stat-value" id="res-maturity">—</span>
+                    </div>
+                    <div class="stat-card stat-growth">
+                        <span class="stat-label">Effective Annual Growth</span>
+                        <span class="stat-value" id="res-growth">—</span>
+                    </div>
+                </div>
+
+                <!-- Chart Section -->
+                <div class="chart-section">
+                    <div class="chart-tabs" role="tablist" aria-label="Chart type">
+                        <button class="chart-tab active" data-chart="doughnut" role="tab" aria-selected="true"
+                            id="tab-doughnut">Doughnut</button>
+                        <button class="chart-tab" data-chart="bar" role="tab" aria-selected="false" id="tab-bar">Bar
+                            Chart</button>
+                    </div>
+                    <div class="chart-canvas-wrap">
+                        <canvas id="result-chart" aria-label="Investment breakdown chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Insights -->
+                <div class="insights-section" id="insights-section">
+                    <h3 class="insights-title">
+                        <svg class="insights-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 16v-4m0-4h.01" />
+                        </svg>
+                        Financial Insights
+                    </h3>
+                    <ul class="insights-list" id="insights-list"></ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- ───────── Footer ───────── -->
+    <footer class="site-footer" role="contentinfo">
+        <div class="container footer-inner">
+            <p class="footer-text">&copy; 2026 <strong>FinCalc Pro</strong> — Professional Financial Tools</p>
+            <p class="footer-disclaimer">This calculator provides estimates for educational purposes. Consult a
+                certified financial advisor for personalized advice.</p>
+        </div>
+    </footer>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
