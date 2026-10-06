@@ -11,8 +11,14 @@ const dom = {
     themeToggle: $('#theme-toggle'),
     form: $('#calc-form'),
     principal: $('#principal'),
+    principalRange: $('#principal-range'),
+    principalHint: $('#principal-slider-val'),
     rate: $('#rate'),
+    rateRange: $('#rate-range'),
+    rateHint: $('#rate-slider-val'),
     time: $('#time'),
+    timeRange: $('#time-range'),
+    timeHint: $('#time-slider-val'),
     frequency: $('#frequency'),
     btnCalc: $('#btn-calculate'),
     btnReset: $('#btn-reset'),
@@ -22,6 +28,11 @@ const dom = {
     resInterest: $('#res-interest'),
     resMaturity: $('#res-maturity'),
     resGrowth: $('#res-growth'),
+    statInterestMultiplier: $('#stat-interest-multiplier'),
+    pctPrincipal: $('#pct-principal'),
+    pctInterest: $('#pct-interest'),
+    segPrincipal: $('#seg-principal'),
+    segInterest: $('#seg-interest'),
     chartCanvas: $('#result-chart'),
     chartTabs: $$('.chart-tab'),
     insightsList: $('#insights-list'),
@@ -29,12 +40,21 @@ const dom = {
     btnPrint: $('#btn-print'),
     btnPdf: $('#btn-pdf'),
     toast: $('#toast'),
+    confettiCanvas: $('#confetti-canvas'),
+    presetPills: $$('.preset-pill'),
+    quickChips: $$('.quick-chips .chip'),
 };
 
 // ────────── State ──────────
 let chartInstance = null;
 let currentChart = 'doughnut';
 let lastResult = null;
+let previousStats = {
+    principal: 0,
+    interest: 0,
+    maturity: 0,
+    growth: 0,
+};
 
 // ────────── Constants ──────────
 const FREQUENCY_LABELS = { 1: 'Annually', 2: 'Semi-Annually', 4: 'Quarterly', 12: 'Monthly', 365: 'Daily' };
@@ -56,40 +76,30 @@ function formatCurrency(amount) {
 }
 
 /**
+ * Format a round currency number for badges / chips (₹1L, ₹50K, ₹1,00,000)
+ * @param {number} amount
+ * @returns {string}
+ */
+function formatShortCurrency(amount) {
+    if (amount >= 1e7) return '₹' + (amount / 1e7).toFixed(amount % 1e7 === 0 ? 0 : 2) + ' Cr';
+    if (amount >= 1e5) return '₹' + (amount / 1e5).toFixed(amount % 1e5 === 0 ? 0 : 2) + ' Lakh';
+    if (amount >= 1e3) return '₹' + (amount / 1e3).toFixed(0) + 'K';
+    return '₹' + amount.toLocaleString('en-IN');
+}
+
+/**
  * Parse a formatted currency/number string back to a float
- * Removes ₹, commas, spaces
  * @param {string} str
  * @returns {number}
  */
 function parseCurrencyInput(str) {
+    if (!str) return 0;
     return parseFloat(str.replace(/[₹,\s]/g, ''));
 }
 
 /**
- * Format the principal input field with Indian grouping as user types
- * @param {HTMLInputElement} input
- */
-function autoFormatCurrencyInput(input) {
-    const raw = input.value.replace(/[^0-9.]/g, '');
-    if (!raw || raw === '.') return;
-
-    const parts = raw.split('.');
-    // Format the integer part with Indian commas
-    let intPart = parts[0].replace(/^0+(?=\d)/, '');
-    if (intPart === '') intPart = '0';
-    intPart = intPart.replace(/\B(?=(\d{2})+(?=\d{3}$)|\d{3}$)/g, function (match, offset) {
-        // Use standard Indian comma formatting
-        return ',';
-    });
-    // Simpler Indian formatting
-    intPart = indianFormat(parts[0].replace(/^0+(?=\d)/, '') || '0');
-
-    input.value = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart;
-}
-
-/**
- * Indian number formatting (1,23,456)
- * @param {string} numStr  Integer string
+ * Indian number formatting helper
+ * @param {string} numStr
  * @returns {string}
  */
 function indianFormat(numStr) {
@@ -101,7 +111,22 @@ function indianFormat(numStr) {
 }
 
 /**
- * Show a toast notification
+ * Format the principal input field with Indian grouping as user types
+ * @param {HTMLInputElement} input
+ */
+function autoFormatCurrencyInput(input) {
+    const raw = input.value.replace(/[^0-9.]/g, '');
+    if (!raw || raw === '.') return;
+
+    const parts = raw.split('.');
+    let intPart = parts[0].replace(/^0+(?=\d)/, '') || '0';
+    intPart = indianFormat(intPart);
+
+    input.value = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart;
+}
+
+/**
+ * Show a toast notification with spring transition
  * @param {string} message
  * @param {number} duration  ms
  */
@@ -114,12 +139,14 @@ function showToast(message, duration = 2500) {
 
 /**
  * Set or clear error state on a form group
- * @param {string} fieldId  e.g. 'principal'
- * @param {string} message  empty to clear
+ * @param {string} fieldId
+ * @param {string} message
  */
 function setFieldError(fieldId, message) {
     const group = $(`#group-${fieldId}`);
     const error = $(`#${fieldId}-error`);
+    if (!group || !error) return;
+
     if (message) {
         group.classList.add('error');
         error.textContent = message;
@@ -198,7 +225,7 @@ function calculateCompoundInterest(P, r, n, t) {
     const rDecimal = r / 100;
     const amount = P * Math.pow(1 + rDecimal / n, n * t);
     const interest = amount - P;
-    // Effective Annual Rate: (1 + r/n)^n - 1
+    // Effective Annual Rate (APY): (1 + r/n)^n - 1
     const effectiveRate = (Math.pow(1 + rDecimal / n, n) - 1) * 100;
 
     return {
@@ -210,33 +237,98 @@ function calculateCompoundInterest(P, r, n, t) {
 }
 
 // ═══════════════════════════════════════════════════
-// RENDER RESULTS
+// ANIMATED NUMBER ROLL ENGINE
 // ═══════════════════════════════════════════════════
 
 /**
- * Animate a stat value with a counting effect
+ * Smooth exponential ease-out counter animation
  * @param {HTMLElement} el
- * @param {string} finalText
+ * @param {number} startVal
+ * @param {number} endVal
+ * @param {number} duration  ms
+ * @param {boolean} isCurrency
+ * @param {string} suffix
  */
-function animateStatValue(el, finalText) {
-    el.classList.add('counting');
-    el.textContent = finalText;
-    setTimeout(() => el.classList.remove('counting'), 500);
+function countUp(el, startVal, endVal, duration = 850, isCurrency = true, suffix = '') {
+    if (!el) return;
+    const startTime = performance.now();
+    el.classList.add('rolling');
+
+    function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // Exponential ease-out
+        const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+        const currentVal = startVal + (endVal - startVal) * ease;
+
+        if (isCurrency) {
+            el.textContent = formatCurrency(currentVal);
+        } else {
+            el.textContent = currentVal.toFixed(2) + suffix;
+        }
+
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        } else {
+            el.classList.remove('rolling');
+        }
+    }
+
+    requestAnimationFrame(step);
 }
 
 /**
- * Display the result stats
+ * Display the result stats with smooth counting animation
  * @param {object} result
  */
 function renderStats(result) {
-    animateStatValue(dom.resPrincipal, formatCurrency(result.principal));
-    animateStatValue(dom.resInterest, formatCurrency(result.interest));
-    animateStatValue(dom.resMaturity, formatCurrency(result.amount));
-    animateStatValue(dom.resGrowth, result.effectiveRate.toFixed(2) + '%');
+    const startP = previousStats.principal || result.principal * 0.7;
+    const startI = previousStats.interest || 0;
+    const startM = previousStats.maturity || result.principal;
+    const startG = previousStats.growth || 0;
+
+    countUp(dom.resPrincipal, startP, result.principal, 800, true);
+    countUp(dom.resInterest, startI, result.interest, 950, true);
+    countUp(dom.resMaturity, startM, result.amount, 950, true);
+    countUp(dom.resGrowth, startG, result.effectiveRate, 750, false, '%');
+
+    // Update multiplier badge
+    if (dom.statInterestMultiplier && result.principal > 0) {
+        const mult = (result.interest / result.principal).toFixed(1);
+        dom.statInterestMultiplier.textContent = mult >= 1 ? `+${mult}x Return` : `+${((result.interest / result.principal) * 100).toFixed(0)}% Return`;
+    }
+
+    // Save previous for next animated transition
+    previousStats = {
+        principal: result.principal,
+        interest: result.interest,
+        maturity: result.amount,
+        growth: result.effectiveRate,
+    };
 }
 
 /**
- * Generate and display financial insights
+ * Animate the Proportional Wealth Breakdown Bar
+ * @param {number} principal
+ * @param {number} interest
+ */
+function renderGrowthBar(principal, interest) {
+    const total = principal + interest;
+    if (total <= 0) return;
+
+    const pPct = ((principal / total) * 100).toFixed(1);
+    const iPct = ((interest / total) * 100).toFixed(1);
+
+    dom.pctPrincipal.textContent = pPct + '%';
+    dom.pctInterest.textContent = iPct + '%';
+
+    // Trigger smooth CSS width transition
+    dom.segPrincipal.style.width = pPct + '%';
+    dom.segInterest.style.width = iPct + '%';
+}
+
+/**
+ * Generate and display financial insights with staggered animations
  * @param {object} result
  * @param {object} inputs
  */
@@ -252,23 +344,23 @@ function renderInsights(result, inputs) {
     const insights = [
         {
             icon: '💰',
-            text: `Your investment of <strong>${formatCurrency(principal)}</strong> will grow to <strong>${formatCurrency(amount)}</strong> in ${time} year${time !== 1 ? 's' : ''}.`,
+            text: `Your investment of <strong>${formatCurrency(principal)}</strong> will compound into <strong>${formatCurrency(amount)}</strong> in ${time} year${time !== 1 ? 's' : ''}.`,
         },
         {
-            icon: '📈',
-            text: `Total wealth generated: <strong>${formatCurrency(interest)}</strong> — a <strong>${growthPct}%</strong> return on your principal.`,
+            icon: '🚀',
+            text: `Total wealth generated: <strong>${formatCurrency(interest)}</strong> — a <strong>${growthPct}%</strong> net profit on your principal deposit.`,
         },
         {
             icon: '📅',
-            text: `With <strong>${freqLabel}</strong> compounding, your effective annual growth rate is <strong>${effectiveRate.toFixed(2)}%</strong>.`,
+            text: `With <strong>${freqLabel}</strong> compounding, your effective annual yield (APY) is <strong>${effectiveRate.toFixed(2)}%</strong>.`,
         },
         {
-            icon: '🔄',
-            text: `Estimated monthly growth rate: <strong>${monthlyGrowth.toFixed(4)}%</strong> — small gains that compound into big results.`,
+            icon: '📈',
+            text: `Estimated continuous monthly growth: <strong>${monthlyGrowth.toFixed(4)}%</strong> — micro-gains accelerating over time.`,
         },
         {
             icon: '⏳',
-            text: `At this rate, your money would approximately double in <strong>${doublingTime.toFixed(1)} years</strong>.`,
+            text: `At this compounding speed, your initial money will double every <strong>${doublingTime.toFixed(1)} years</strong>.`,
         },
     ];
 
@@ -284,6 +376,83 @@ function renderInsights(result, inputs) {
 }
 
 // ═══════════════════════════════════════════════════
+// CELEBRATION CONFETTI ENGINE (CANVAS)
+// ═══════════════════════════════════════════════════
+
+/**
+ * Launch an animated confetti burst to celebrate calculation
+ */
+function triggerCelebration() {
+    const canvas = dom.confettiCanvas;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles = [];
+    const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#38bdf8'];
+    const particleCount = 65;
+
+    // Center origin from bottom/middle
+    const originX = canvas.width / 2;
+    const originY = canvas.height * 0.45;
+
+    for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = Math.random() * 9 + 4;
+        particles.push({
+            x: originX + (Math.random() - 0.5) * 120,
+            y: originY + (Math.random() - 0.5) * 40,
+            vx: Math.cos(angle) * velocity,
+            vy: Math.sin(angle) * velocity - 4,
+            size: Math.random() * 7 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rotation: Math.random() * 360,
+            rotSpeed: (Math.random() - 0.5) * 12,
+            opacity: 1,
+            gravity: 0.28,
+            friction: 0.98,
+        });
+    }
+
+    let animId;
+    function renderFrame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let activeCount = 0;
+
+        for (const p of particles) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += p.gravity;
+            p.vx *= p.friction;
+            p.rotation += p.rotSpeed;
+            p.opacity -= 0.016;
+
+            if (p.opacity > 0) {
+                activeCount++;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.opacity);
+                ctx.translate(p.x, p.y);
+                ctx.rotate((p.rotation * Math.PI) / 180);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+                ctx.restore();
+            }
+        }
+
+        if (activeCount > 0) {
+            animId = requestAnimationFrame(renderFrame);
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            cancelAnimationFrame(animId);
+        }
+    }
+
+    renderFrame();
+}
+
+// ═══════════════════════════════════════════════════
 // CHART
 // ═══════════════════════════════════════════════════
 
@@ -296,13 +465,13 @@ function chartColors() {
         principal: '#6366f1',
         interest: '#10b981',
         total: '#06b6d4',
-        text: isDark ? '#a5a2c4' : '#4b5563',
+        text: isDark ? '#aba8cd' : '#4b5563',
         grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
     };
 }
 
 /**
- * Create or update the chart
+ * Create or update the chart with smooth transition
  * @param {object} result
  * @param {'doughnut'|'bar'} type
  */
@@ -315,14 +484,13 @@ function renderChart(result, type) {
     }
 
     const ctx = dom.chartCanvas.getContext('2d');
-
-    const labels = ['Principal', 'Interest Earned'];
+    const labels = ['Principal Invested', 'Interest Earned'];
     const data = [result.principal, result.interest];
 
     const commonDataset = {
         backgroundColor: [colors.principal, colors.interest],
         borderWidth: 0,
-        hoverOffset: type === 'doughnut' ? 12 : 0,
+        hoverOffset: type === 'doughnut' ? 14 : 0,
     };
 
     const config = {
@@ -334,15 +502,18 @@ function renderChart(result, type) {
                     label: 'Amount (₹)',
                     data,
                     ...commonDataset,
-                    borderRadius: type === 'bar' ? 8 : 0,
-                    barPercentage: 0.55,
+                    borderRadius: type === 'bar' ? 10 : 0,
+                    barPercentage: 0.52,
                 },
             ],
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            animation: { duration: 800, easing: 'easeOutQuart' },
+            animation: {
+                duration: 900,
+                easing: 'easeOutQuart',
+            },
             plugins: {
                 legend: {
                     display: true,
@@ -356,11 +527,11 @@ function renderChart(result, type) {
                     },
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(30, 27, 55, 0.92)',
-                    titleFont: { family: "'Inter', sans-serif", weight: '600' },
+                    backgroundColor: 'rgba(23, 20, 48, 0.94)',
+                    titleFont: { family: "'Inter', sans-serif", weight: '700' },
                     bodyFont: { family: "'JetBrains Mono', monospace", size: 13 },
-                    padding: 12,
-                    cornerRadius: 8,
+                    padding: 14,
+                    cornerRadius: 10,
                     callbacks: {
                         label: (ctx) => ` ${ctx.label}: ${formatCurrency(ctx.parsed.y ?? ctx.parsed)}`,
                     },
@@ -369,7 +540,7 @@ function renderChart(result, type) {
             ...(type === 'bar' && {
                 scales: {
                     x: {
-                        ticks: { color: colors.text, font: { family: "'Inter', sans-serif", weight: '500' } },
+                        ticks: { color: colors.text, font: { family: "'Inter', sans-serif", weight: '600' } },
                         grid: { display: false },
                     },
                     y: {
@@ -383,7 +554,7 @@ function renderChart(result, type) {
                 },
             }),
             ...(type === 'doughnut' && {
-                cutout: '62%',
+                cutout: '64%',
             }),
         },
     };
@@ -396,11 +567,11 @@ function renderChart(result, type) {
 // ═══════════════════════════════════════════════════
 
 /**
- * Handle form submission — calculate & display
- * @param {Event} e
+ * Handle form submission — calculate & display with animations
+ * @param {Event} [e]
  */
 function handleCalculate(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
 
     const inputs = validateInputs();
     if (!inputs) return;
@@ -411,7 +582,7 @@ function handleCalculate(e) {
     dom.resultsCard.classList.remove('hidden');
     dom.resultsCard.classList.remove('show');
 
-    // Show loader briefly
+    // Show loader
     dom.calcLoader.classList.add('active');
     dom.calcLoader.setAttribute('aria-hidden', 'false');
 
@@ -420,6 +591,7 @@ function handleCalculate(e) {
         lastResult = { ...result, rate, time, n };
 
         renderStats(result);
+        renderGrowthBar(result.principal, result.interest);
         renderChart(result, currentChart);
         renderInsights(result, { ...inputs, rate });
 
@@ -431,11 +603,14 @@ function handleCalculate(e) {
         void dom.resultsCard.offsetWidth; // force reflow
         dom.resultsCard.classList.add('show');
 
+        // Launch celebratory confetti burst
+        triggerCelebration();
+
         // Scroll into view on mobile
         if (window.innerWidth <= 900) {
             dom.resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-    }, 700);
+    }, 450);
 }
 
 /**
@@ -446,6 +621,13 @@ function handleReset() {
     dom.rate.value = '';
     dom.time.value = '';
     dom.frequency.value = '4';
+
+    if (dom.principalRange) dom.principalRange.value = 100000;
+    if (dom.rateRange) dom.rateRange.value = 10;
+    if (dom.timeRange) dom.timeRange.value = 10;
+
+    updateFieldHints();
+    clearActiveChips();
 
     // Clear errors
     ['principal', 'rate', 'time'].forEach((f) => setFieldError(f, ''));
@@ -458,6 +640,7 @@ function handleReset() {
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
     lastResult = null;
+    previousStats = { principal: 0, interest: 0, maturity: 0, growth: 0 };
     showToast('Calculator reset');
 }
 
@@ -471,14 +654,13 @@ function handleThemeToggle() {
     html.setAttribute('data-theme', next);
     localStorage.setItem('fincalc-theme', next);
 
-    // Re-render chart with new colors if visible
     if (lastResult && chartInstance) {
         renderChart(lastResult, currentChart);
     }
 }
 
 /**
- * Copy results to clipboard
+ * Copy results to clipboard with animated feedback
  */
 async function handleCopy() {
     if (!lastResult) return;
@@ -488,14 +670,18 @@ async function handleCopy() {
         `Principal Amount:     ${formatCurrency(lastResult.principal)}`,
         `Interest Earned:      ${formatCurrency(lastResult.interest)}`,
         `Maturity Value:       ${formatCurrency(lastResult.amount)}`,
-        `Effective Growth:     ${lastResult.effectiveRate.toFixed(2)}%`,
+        `Effective APY:        ${lastResult.effectiveRate.toFixed(2)}%`,
         `─────────────────────────────────────`,
         `Rate: ${lastResult.rate}%  |  Period: ${lastResult.time} yrs  |  Frequency: ${FREQUENCY_LABELS[lastResult.n]}`,
     ].join('\n');
 
     try {
         await navigator.clipboard.writeText(text);
-        showToast('Results copied to clipboard');
+        showToast('✓ Results copied to clipboard');
+
+        // Animate button feedback
+        dom.btnCopy.style.transform = 'scale(1.2)';
+        setTimeout(() => dom.btnCopy.style.transform = '', 250);
     } catch {
         showToast('Failed to copy — try manually');
     }
@@ -525,13 +711,12 @@ function handlePdf() {
 
     showToast('Generating PDF…');
 
-    // Temporarily make sure card is visible for capture
     const wasHidden = element.classList.contains('hidden');
     if (wasHidden) element.classList.remove('hidden');
 
     html2pdf().set(opt).from(element).save().then(() => {
         if (wasHidden) element.classList.add('hidden');
-        showToast('PDF downloaded');
+        showToast('PDF downloaded successfully');
     }).catch(() => {
         if (wasHidden) element.classList.add('hidden');
         showToast('PDF generation failed');
@@ -561,13 +746,175 @@ function handleChartTabClick(e) {
 }
 
 // ═══════════════════════════════════════════════════
-// INPUT FORMATTING & RESTRICTIONS
+// SYNCHRONIZED SLIDERS, CHIPS & PRESETS
 // ═══════════════════════════════════════════════════
+
+/**
+ * Update field hint badges
+ */
+function updateFieldHints() {
+    if (dom.principalHint && dom.principal) {
+        const val = parseCurrencyInput(dom.principal.value) || 0;
+        dom.principalHint.textContent = val > 0 ? formatShortCurrency(val) : '₹0';
+    }
+    if (dom.rateHint && dom.rate) {
+        const val = parseFloat(dom.rate.value) || 0;
+        dom.rateHint.textContent = val > 0 ? val + '%' : '0%';
+    }
+    if (dom.timeHint && dom.time) {
+        const val = parseFloat(dom.time.value) || 0;
+        dom.timeHint.textContent = val > 0 ? val + (val === 1 ? ' Year' : ' Years') : '0 Years';
+    }
+}
+
+/**
+ * Flash hint badge animation
+ * @param {HTMLElement} badge
+ */
+function flashHint(badge) {
+    if (!badge) return;
+    badge.classList.add('updated');
+    setTimeout(() => badge.classList.remove('updated'), 250);
+}
+
+/**
+ * Clear all active chips
+ */
+function clearActiveChips() {
+    dom.quickChips.forEach((chip) => chip.classList.remove('active'));
+}
+
+/**
+ * Match and highlight quick chips based on current value
+ * @param {string} target  'principal' | 'rate' | 'time'
+ * @param {number} value
+ */
+function syncActiveChip(target, value) {
+    $$(`.quick-chips[data-target="${target}"] .chip`).forEach((chip) => {
+        const chipVal = parseFloat(chip.dataset.val);
+        if (chipVal === value) {
+            chip.classList.add('active');
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+}
+
+/**
+ * Setup range slider synchronization
+ */
+function initSliders() {
+    // Principal range slider
+    dom.principalRange.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        dom.principal.value = val.toLocaleString('en-IN');
+        updateFieldHints();
+        flashHint(dom.principalHint);
+        syncActiveChip('principal', val);
+        setFieldError('principal', '');
+    });
+
+    // Rate range slider
+    dom.rateRange.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        dom.rate.value = val;
+        updateFieldHints();
+        flashHint(dom.rateHint);
+        syncActiveChip('rate', val);
+        setFieldError('rate', '');
+    });
+
+    // Time range slider
+    dom.timeRange.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        dom.time.value = val;
+        updateFieldHints();
+        flashHint(dom.timeHint);
+        syncActiveChip('time', val);
+        setFieldError('time', '');
+    });
+
+    // Quick chips click
+    dom.quickChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+            const parent = chip.closest('.quick-chips');
+            const target = parent.dataset.target;
+            const val = parseFloat(chip.dataset.val);
+
+            if (target === 'principal') {
+                dom.principal.value = val.toLocaleString('en-IN');
+                dom.principalRange.value = val;
+                flashHint(dom.principalHint);
+            } else if (target === 'rate') {
+                dom.rate.value = val;
+                dom.rateRange.value = val;
+                flashHint(dom.rateHint);
+            } else if (target === 'time') {
+                dom.time.value = val;
+                dom.timeRange.value = val;
+                flashHint(dom.timeHint);
+            }
+
+            syncActiveChip(target, val);
+            updateFieldHints();
+            setFieldError(target, '');
+        });
+    });
+
+    // Preset Scenario Pills
+    dom.presetPills.forEach((pill) => {
+        pill.addEventListener('click', () => {
+            const p = parseFloat(pill.dataset.p);
+            const r = parseFloat(pill.dataset.r);
+            const t = parseFloat(pill.dataset.t);
+            const n = pill.dataset.n;
+
+            dom.principal.value = p.toLocaleString('en-IN');
+            dom.principalRange.value = p;
+            dom.rate.value = r;
+            dom.rateRange.value = r;
+            dom.time.value = t;
+            dom.timeRange.value = t;
+            dom.frequency.value = n;
+
+            updateFieldHints();
+            syncActiveChip('principal', p);
+            syncActiveChip('rate', r);
+            syncActiveChip('time', t);
+
+            // Clean errors & trigger calculation
+            ['principal', 'rate', 'time'].forEach((f) => setFieldError(f, ''));
+            handleCalculate();
+        });
+    });
+}
+
+/**
+ * Initialize 3D Card Hover Perspective
+ */
+function initCardTilt() {
+    const cards = $$('.interactive-card');
+    cards.forEach((card) => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const rotateX = ((y - centerY) / centerY) * -3;
+            const rotateY = ((x - centerX) / centerX) * 3;
+            card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-2px)`;
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0)';
+        });
+    });
+}
 
 /**
  * Restrict input to numeric characters and formatting chars
  * @param {Event} e
- * @param {string} allowed  regex character class
+ * @param {string} allowed
  */
 function restrictInput(e, allowed) {
     const regex = new RegExp(`[^${allowed}]`, 'g');
@@ -575,7 +922,6 @@ function restrictInput(e, allowed) {
     const pos = el.selectionStart;
     const before = el.value;
     el.value = el.value.replace(regex, '');
-    // Restore cursor if value changed
     if (el.value !== before) {
         el.selectionStart = el.selectionEnd = Math.max(0, pos - 1);
     }
@@ -588,7 +934,7 @@ function restrictInput(e, allowed) {
 function init() {
     // ── Page loader ──
     window.addEventListener('load', () => {
-        setTimeout(() => dom.pageLoader.classList.add('done'), 350);
+        setTimeout(() => dom.pageLoader.classList.add('done'), 280);
     });
 
     // ── Restore theme ──
@@ -617,32 +963,59 @@ function init() {
     // ── Chart tabs ──
     dom.chartTabs.forEach((tab) => tab.addEventListener('click', handleChartTabClick));
 
-    // ── Principal: auto-format with commas ──
+    // ── Principal: auto-format with commas and sync ──
     dom.principal.addEventListener('input', (e) => {
         restrictInput(e, '0-9.,');
         autoFormatCurrencyInput(e.target);
+        const val = parseCurrencyInput(e.target.value);
+        if (dom.principalRange && !isNaN(val) && val >= 10000 && val <= 10000000) {
+            dom.principalRange.value = val;
+        }
+        updateFieldHints();
+        syncActiveChip('principal', val);
     });
 
-    // ── Rate: restrict to numbers and single dot ──
+    // ── Rate: sync with slider ──
     dom.rate.addEventListener('input', (e) => {
         restrictInput(e, '0-9.');
-        // Ensure only one dot
         const parts = e.target.value.split('.');
         if (parts.length > 2) e.target.value = parts[0] + '.' + parts.slice(1).join('');
+        const val = parseFloat(e.target.value);
+        if (dom.rateRange && !isNaN(val) && val >= 1 && val <= 30) {
+            dom.rateRange.value = val;
+        }
+        updateFieldHints();
+        syncActiveChip('rate', val);
     });
 
-    // ── Time: restrict to numbers and single dot ──
+    // ── Time: sync with slider ──
     dom.time.addEventListener('input', (e) => {
         restrictInput(e, '0-9.');
         const parts = e.target.value.split('.');
         if (parts.length > 2) e.target.value = parts[0] + '.' + parts.slice(1).join('');
+        const val = parseFloat(e.target.value);
+        if (dom.timeRange && !isNaN(val) && val >= 1 && val <= 40) {
+            dom.timeRange.value = val;
+        }
+        updateFieldHints();
+        syncActiveChip('time', val);
     });
 
     // ── Clear error on focus ──
     ['principal', 'rate', 'time'].forEach((id) => {
-        $(`#${id}`).addEventListener('focus', () => setFieldError(id, ''));
+        $(`#${id}`)?.addEventListener('focus', () => setFieldError(id, ''));
     });
+
+    // ── Interactive Sliders & Tilt ──
+    initSliders();
+    initCardTilt();
+
+    // Initialize initial default values for convenient first click
+    dom.principal.value = '1,00,000';
+    dom.rate.value = '10';
+    dom.time.value = '10';
+    updateFieldHints();
 }
 
-// Kick off
+// Start
 init();
