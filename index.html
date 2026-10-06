@@ -27,6 +27,16 @@
 </head>
 
 <body>
+    <!-- Animated background mesh & glowing orbs -->
+    <div class="animated-bg-layer" aria-hidden="true">
+        <div class="floating-orb orb-1"></div>
+        <div class="floating-orb orb-2"></div>
+        <div class="floating-orb orb-3"></div>
+        <div class="mesh-grid"></div>
+    </div>
+    <!-- Celebration canvas -->
+    <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
+
     <!-- ───────── Loader Overlay ───────── -->
     <div id="page-loader" class="page-loader" aria-hidden="true">
         <div class="loader-spinner"></div>
@@ -49,7 +59,7 @@
                         </defs>
                     </svg>
                 </span>
-                <span class="logo-text">FinCalc <strong>Pro</strong></span>
+                <span class="logo-text">FinCalc <strong class="logo-accent">Pro</strong></span>
             </a>
             <nav class="header-actions" aria-label="Utility actions">
                 <button id="theme-toggle" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
@@ -70,15 +80,26 @@
     <main class="main container" role="main">
         <!-- Hero -->
         <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-badge animate-badge">
+                <span class="badge-pulse"></span>
+                <span class="badge-text">⚡ High-Precision Compound Growth Engine</span>
+            </div>
             <h1 id="hero-title" class="hero-title">Compound Interest Calculator</h1>
-            <p class="hero-subtitle">Plan your investments precisely — see how your money grows over time with the power
-                of compounding.</p>
+            <p class="hero-subtitle">Plan your investments precisely — see how your money multiplies over time with the dynamic power of compounding.</p>
+
+            <!-- Quick Preset Chips -->
+            <div class="preset-bar" aria-label="Quick preset scenarios">
+                <span class="preset-label">Quick Scenarios:</span>
+                <button type="button" class="preset-pill" data-p="100000" data-r="12" data-t="10" data-n="4">💼 ₹1L • 10Y @ 12%</button>
+                <button type="button" class="preset-pill" data-p="500000" data-r="10" data-t="15" data-n="4">🏡 ₹5L • 15Y @ 10%</button>
+                <button type="button" class="preset-pill" data-p="1500000" data-r="14" data-t="20" data-n="12">🚀 ₹15L • 20Y @ 14%</button>
+            </div>
         </section>
 
         <!-- Calculator Grid -->
         <div class="calc-grid">
             <!-- ──── Input Card ──── -->
-            <section class="card card-input" aria-labelledby="input-heading">
+            <section class="card card-input interactive-card" aria-labelledby="input-heading">
                 <div class="card-header">
                     <h2 id="input-heading" class="card-title">
                         <span class="card-icon" aria-hidden="true">
@@ -93,33 +114,66 @@
                 <form id="calc-form" class="calc-form" novalidate>
                     <!-- Principal -->
                     <div class="form-group" id="group-principal">
-                        <label for="principal" class="form-label">Principal Amount</label>
+                        <div class="form-label-row">
+                            <label for="principal" class="form-label">Principal Amount</label>
+                            <span class="field-hint-val" id="principal-slider-val">₹1,00,000</span>
+                        </div>
                         <div class="input-wrapper">
                             <span class="input-prefix" aria-hidden="true">₹</span>
                             <input type="text" id="principal" class="form-input" placeholder="e.g. 1,00,000"
                                 inputmode="numeric" autocomplete="off" aria-describedby="principal-error" required />
+                        </div>
+                        <input type="range" id="principal-range" class="animated-range" min="10000" max="10000000" step="10000" value="100000" aria-label="Principal slider" />
+                        <div class="quick-chips" data-target="principal">
+                            <button type="button" class="chip" data-val="50000">₹50K</button>
+                            <button type="button" class="chip active" data-val="100000">₹1L</button>
+                            <button type="button" class="chip" data-val="500000">₹5L</button>
+                            <button type="button" class="chip" data-val="1000000">₹10L</button>
+                            <button type="button" class="chip" data-val="2500000">₹25L</button>
                         </div>
                         <span class="form-error" id="principal-error" role="alert"></span>
                     </div>
 
                     <!-- Rate -->
                     <div class="form-group" id="group-rate">
-                        <label for="rate" class="form-label">Annual Interest Rate</label>
+                        <div class="form-label-row">
+                            <label for="rate" class="form-label">Annual Interest Rate</label>
+                            <span class="field-hint-val" id="rate-slider-val">10%</span>
+                        </div>
                         <div class="input-wrapper">
                             <input type="text" id="rate" class="form-input" placeholder="e.g. 8.5" inputmode="decimal"
                                 autocomplete="off" aria-describedby="rate-error" required />
                             <span class="input-suffix" aria-hidden="true">%</span>
+                        </div>
+                        <input type="range" id="rate-range" class="animated-range" min="1" max="30" step="0.25" value="10" aria-label="Interest rate slider" />
+                        <div class="quick-chips" data-target="rate">
+                            <button type="button" class="chip" data-val="6">6%</button>
+                            <button type="button" class="chip" data-val="8">8%</button>
+                            <button type="button" class="chip active" data-val="10">10%</button>
+                            <button type="button" class="chip" data-val="12">12%</button>
+                            <button type="button" class="chip" data-val="15">15%</button>
                         </div>
                         <span class="form-error" id="rate-error" role="alert"></span>
                     </div>
 
                     <!-- Time -->
                     <div class="form-group" id="group-time">
-                        <label for="time" class="form-label">Time Period</label>
+                        <div class="form-label-row">
+                            <label for="time" class="form-label">Time Period</label>
+                            <span class="field-hint-val" id="time-slider-val">10 Years</span>
+                        </div>
                         <div class="input-wrapper">
                             <input type="text" id="time" class="form-input" placeholder="e.g. 10" inputmode="decimal"
                                 autocomplete="off" aria-describedby="time-error" required />
                             <span class="input-suffix" aria-hidden="true">Years</span>
+                        </div>
+                        <input type="range" id="time-range" class="animated-range" min="1" max="40" step="1" value="10" aria-label="Time period slider" />
+                        <div class="quick-chips" data-target="time">
+                            <button type="button" class="chip" data-val="3">3 Yrs</button>
+                            <button type="button" class="chip" data-val="5">5 Yrs</button>
+                            <button type="button" class="chip active" data-val="10">10 Yrs</button>
+                            <button type="button" class="chip" data-val="15">15 Yrs</button>
+                            <button type="button" class="chip" data-val="20">20 Yrs</button>
                         </div>
                         <span class="form-error" id="time-error" role="alert"></span>
                     </div>
@@ -129,11 +183,11 @@
                         <label for="frequency" class="form-label">Compounding Frequency</label>
                         <div class="select-wrapper">
                             <select id="frequency" class="form-select" aria-describedby="frequency-desc">
-                                <option value="1">Annually</option>
-                                <option value="2">Semi-Annually</option>
-                                <option value="4" selected>Quarterly</option>
-                                <option value="12">Monthly</option>
-                                <option value="365">Daily</option>
+                                <option value="1">Annually (1x / year)</option>
+                                <option value="2">Semi-Annually (2x / year)</option>
+                                <option value="4" selected>Quarterly (4x / year)</option>
+                                <option value="12">Monthly (12x / year)</option>
+                                <option value="365">Daily (365x / year)</option>
                             </select>
                             <span class="select-arrow" aria-hidden="true">
                                 <svg viewBox="0 0 20 20" fill="currentColor">
@@ -142,17 +196,18 @@
                                 </svg>
                             </span>
                         </div>
-                        <span class="form-hint" id="frequency-desc">How often interest is compounded</span>
+                        <span class="form-hint" id="frequency-desc">How often interest is compounded and added to principal</span>
                     </div>
 
                     <!-- Actions -->
                     <div class="form-actions">
-                        <button type="submit" id="btn-calculate" class="btn btn-primary">
+                        <button type="submit" id="btn-calculate" class="btn btn-primary pulse-btn">
+                            <span class="btn-shimmer" aria-hidden="true"></span>
                             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6m-3-3h6" />
                             </svg>
-                            Calculate
+                            <span>Calculate Growth</span>
                         </button>
                         <button type="reset" id="btn-reset" class="btn btn-ghost">
                             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -160,14 +215,14 @@
                                 <path d="M1 4v6h6" />
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                             </svg>
-                            Reset
+                            <span>Reset</span>
                         </button>
                     </div>
                 </form>
             </section>
 
             <!-- ──── Results Card ──── -->
-            <section class="card card-results hidden" id="results-card" aria-labelledby="results-heading">
+            <section class="card card-results hidden interactive-card" id="results-card" aria-labelledby="results-heading">
                 <div class="card-header">
                     <h2 id="results-heading" class="card-title">
                         <span class="card-icon" aria-hidden="true">
@@ -175,7 +230,7 @@
                                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                             </svg>
                         </span>
-                        Results
+                        Investment Summary
                     </h2>
                     <div class="result-actions">
                         <button id="btn-copy" class="icon-btn small" aria-label="Copy results" title="Copy results">
@@ -204,27 +259,58 @@
 
                 <!-- Calculation loading overlay -->
                 <div id="calc-loader" class="calc-loader" aria-hidden="true">
+                    <div class="calc-loader-spinner"></div>
                     <div class="calc-loader-bar"></div>
-                    <span>Crunching numbers…</span>
+                    <span class="calc-loader-text">Compounding your future…</span>
                 </div>
 
                 <!-- Result Stat Cards -->
                 <div class="result-stats" id="result-stats">
-                    <div class="stat-card stat-principal">
-                        <span class="stat-label">Principal Amount</span>
+                    <div class="stat-card stat-principal" data-stat="principal">
+                        <div class="stat-header-row">
+                            <span class="stat-label">Principal Amount</span>
+                            <span class="stat-badge badge-p">Invested</span>
+                        </div>
                         <span class="stat-value" id="res-principal">—</span>
                     </div>
-                    <div class="stat-card stat-interest">
-                        <span class="stat-label">Interest Earned</span>
+                    <div class="stat-card stat-interest" data-stat="interest">
+                        <div class="stat-header-row">
+                            <span class="stat-label">Interest Earned</span>
+                            <span class="stat-badge badge-i" id="stat-interest-multiplier">Profit</span>
+                        </div>
                         <span class="stat-value" id="res-interest">—</span>
                     </div>
-                    <div class="stat-card stat-maturity">
-                        <span class="stat-label">Maturity Value</span>
+                    <div class="stat-card stat-maturity highlighted-stat" data-stat="maturity">
+                        <div class="stat-header-row">
+                            <span class="stat-label">Maturity Value</span>
+                            <span class="stat-badge badge-m">Total Future Value</span>
+                        </div>
                         <span class="stat-value" id="res-maturity">—</span>
                     </div>
-                    <div class="stat-card stat-growth">
-                        <span class="stat-label">Effective Annual Growth</span>
+                    <div class="stat-card stat-growth" data-stat="growth">
+                        <div class="stat-header-row">
+                            <span class="stat-label">Effective APY</span>
+                            <span class="stat-badge badge-g">Annual Yield</span>
+                        </div>
                         <span class="stat-value" id="res-growth">—</span>
+                    </div>
+                </div>
+
+                <!-- Proportional Growth Breakdown Bar -->
+                <div class="growth-bar-container" id="growth-bar-container">
+                    <div class="growth-bar-header">
+                        <span class="growth-legend-item">
+                            <span class="legend-dot dot-principal"></span>
+                            Principal: <strong id="pct-principal">50%</strong>
+                        </span>
+                        <span class="growth-legend-item">
+                            <span class="legend-dot dot-interest"></span>
+                            Interest Wealth: <strong id="pct-interest">50%</strong>
+                        </span>
+                    </div>
+                    <div class="growth-bar-track">
+                        <div class="growth-segment seg-principal" id="seg-principal" style="width: 50%;"></div>
+                        <div class="growth-segment seg-interest" id="seg-interest" style="width: 50%;"></div>
                     </div>
                 </div>
 
@@ -232,9 +318,9 @@
                 <div class="chart-section">
                     <div class="chart-tabs" role="tablist" aria-label="Chart type">
                         <button class="chart-tab active" data-chart="doughnut" role="tab" aria-selected="true"
-                            id="tab-doughnut">Doughnut</button>
+                            id="tab-doughnut">Breakdown</button>
                         <button class="chart-tab" data-chart="bar" role="tab" aria-selected="false" id="tab-bar">Bar
-                            Chart</button>
+                            Comparison</button>
                     </div>
                     <div class="chart-canvas-wrap">
                         <canvas id="result-chart" aria-label="Investment breakdown chart"></canvas>
@@ -249,7 +335,7 @@
                             <circle cx="12" cy="12" r="10" />
                             <path d="M12 16v-4m0-4h.01" />
                         </svg>
-                        Financial Insights
+                        Financial Insights & Analysis
                     </h3>
                     <ul class="insights-list" id="insights-list"></ul>
                 </div>
@@ -260,9 +346,8 @@
     <!-- ───────── Footer ───────── -->
     <footer class="site-footer" role="contentinfo">
         <div class="container footer-inner">
-            <p class="footer-text">&copy; 2026 <strong>FinCalc Pro</strong> — Professional Financial Tools</p>
-            <p class="footer-disclaimer">This calculator provides estimates for educational purposes. Consult a
-                certified financial advisor for personalized advice.</p>
+            <p class="footer-text">&copy; 2026 <strong class="footer-brand">FinCalc Pro</strong> — High-Performance Wealth Analytics</p>
+            <p class="footer-disclaimer">Calculations are for projection & illustrative purposes based on compound formula algorithms. Consult a licensed financial advisor for individual tax and portfolio decisions.</p>
         </div>
     </footer>
 
